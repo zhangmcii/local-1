@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Mutex;
+use tauri::Manager;
 
 struct BackendState(Mutex<Option<Child>>);
 
@@ -63,11 +64,10 @@ pub fn run() {
     })
     .on_window_event(|window, event| {
       if let tauri::WindowEvent::CloseRequested { .. } = event {
-        if let Some(state) = window.app_handle().try_state::<BackendState>() {
-          if let Ok(mut guard) = state.0.lock() {
-            if let Some(mut child) = guard.take() {
-              let _ = child.kill();
-            }
+        let state = window.app_handle().state::<BackendState>();
+        if let Ok(mut guard) = state.0.lock() {
+          if let Some(mut child) = guard.take() {
+            let _ = child.kill();
           }
         }
       }
