@@ -1,5 +1,8 @@
 import os
-from flask import Flask, jsonify, request, send_file, Response
+import tempfile
+import hashlib
+import subprocess
+from flask import Flask, jsonify, request, Response, send_file
 from flask_cors import CORS
 import mimetypes
 from config import VIDEO_FOLDER, DEFAULT_PAGE_SIZE
@@ -240,6 +243,76 @@ def stream_video(filename):
         }), 500
 
 
+@app.route('/api/videos/<filename>/poster', methods=['GET'])
+def get_video_poster(filename):
+    """返回视频封面：优先抽帧，失败时返回占位图"""
+    if '..' in filename or filename.startswith('/'):
+        return jsonify({
+            'success': False,
+            'error': 'Invalid filename'
+        }), 400
+
+    file_path = os.path.join(VIDEO_FOLDER, filename)
+    if not os.path.exists(file_path):
+        return jsonify({
+            'success': False,
+            'error': 'Video not found'
+        }), 404
+
+    cache_dir = os.path.join(tempfile.gettempdir(), 'local_v_posters')
+    os.makedirs(cache_dir, exist_ok=True)
+
+    cache_key = hashlib.md5(file_path.encode('utf-8')).hexdigest()
+    poster_path = os.path.join(cache_dir, f'{cache_key}.jpg')
+
+    if not os.path.exists(poster_path):
+        ffmpeg_bin = os.getenv('FFMPEG_BIN', 'ffmpeg')
+        cmd = [
+            ffmpeg_bin,
+            '-y',
+            '-ss',
+            '00:00:01',
+            '-i',
+            file_path,
+            '-frames:v',
+            '1',
+            '-q:v',
+            '2',
+            poster_path
+        ]
+
+        try:
+            subprocess.run(
+                cmd,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except Exception:
+            poster_path = ''
+
+    if poster_path and os.path.exists(poster_path):
+        return send_file(poster_path, mimetype='image/jpeg')
+
+    safe_name = filename.replace('<', '').replace('>', '')
+    initials = safe_name[:2].upper() if safe_name else 'VD'
+    svg = f"""
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#0891b2"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg)"/>
+  <circle cx="320" cy="180" r="52" fill="rgba(255,255,255,0.22)"/>
+  <polygon points="304,152 304,208 350,180" fill="#ffffff"/>
+  <text x="320" y="300" text-anchor="middle" fill="rgba(255,255,255,0.95)" font-size="34" font-family="Arial, sans-serif">{initials}</text>
+</svg>
+"""
+    return Response(svg.strip(), mimetype='image/svg+xml')
+
+
 @app.route('/api/refresh', methods=['POST'])
 def refresh_videos():
     """刷新视频列表缓存"""
@@ -360,4 +433,5 @@ if __name__ == '__main__':
         os.makedirs(VIDEO_FOLDER, exist_ok=True)
         print(f"Created video folder: {VIDEO_FOLDER}")
     
-    app.run(host='0.0.0.0', port=8990, debug=True)
+    debug_mode = os.getenv('FLASK_DEBUG', '0') == '1'
+    app.run(host='0.0.0.0', port=8990, debug=debug_mode)

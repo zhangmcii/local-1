@@ -16,7 +16,6 @@ const getApiBaseUrl = () => {
 }
 
 const API_BASE_URL = getApiBaseUrl()
-console.log('API Base URL:', API_BASE_URL)
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -46,7 +45,11 @@ export const videoApi = {
    * @returns {string}
    */
   getVideoStreamUrl(filename) {
-    return `${API_BASE_URL}/videos/${filename}`
+    return `${API_BASE_URL}/videos/${encodeURIComponent(filename)}`
+  },
+
+  getVideoPosterUrl(filename) {
+    return `${API_BASE_URL}/videos/${encodeURIComponent(filename)}/poster`
   },
 
   /**

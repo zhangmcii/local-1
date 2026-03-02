@@ -12,6 +12,7 @@
       <div class="player-section">
         <VideoPlayer
           :src="videoSrc"
+          :poster="videoPoster"
           type="video/mp4"
           @ready="handlePlayerReady"
           @error="handlePlayerError"
@@ -124,6 +125,7 @@ export default {
     return {
       ArrowLeft,
       videoSrc: '',
+      videoPoster: '',
       fileSize: '',
       modifyTime: '',
       error: null,
@@ -181,12 +183,9 @@ export default {
           if (video) {
             this.videoInfo = video
             this.videoSrc = videoApi.getVideoStreamUrl(this.filename)
+            this.videoPoster = videoApi.getVideoPosterUrl(this.filename)
             this.fileSize = video.size_formatted
             this.modifyTime = video.mtime_formatted
-            
-            // 调试信息
-            console.log('视频URL:', this.videoSrc)
-            console.log('视频大小:', video.size)
           } else {
             throw new Error('视频信息未找到')
           }
@@ -254,7 +253,7 @@ export default {
     async checkVideoFile() {
       this.isCheckingVideo = true
       try {
-        const response = await fetch(`http://localhost:5000/api/videos/${this.filename}/check`)
+        const response = await fetch(`${videoApi.getVideoStreamUrl(this.filename)}/check`)
         const result = await response.json()
         
         if (result.success) {

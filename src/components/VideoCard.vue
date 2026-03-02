@@ -1,13 +1,7 @@
 <template>
   <el-card class="video-card" shadow="hover" @click="handleClick">
     <div class="video-thumbnail">
-      <video
-        ref="thumbnailVideo"
-        class="thumbnail-video"
-        preload="metadata"
-        muted
-        :src="video.url"
-      />
+      <img class="thumbnail-image" :src="posterSrc" :alt="video.name" loading="lazy" />
       
       <div class="play-overlay">
         <el-icon class="play-icon"><VideoPlay /></el-icon>
@@ -33,6 +27,8 @@
 </template>
 
 <script>
+import { videoApi } from '../api/video'
+
 export default {
   name: 'VideoCard',
   
@@ -44,6 +40,9 @@ export default {
   },
   
   computed: {
+    posterSrc() {
+      return videoApi.getVideoPosterUrl(this.video.name)
+    },
     truncatedName() {
       const maxLength = 40
       if (this.video.name.length > maxLength) {
@@ -53,27 +52,7 @@ export default {
     }
   },
   
-  mounted() {
-    // 尝试获取视频第一帧作为封面
-    this.loadThumbnail()
-  },
-  
   methods: {
-    loadThumbnail() {
-      const video = this.$refs.thumbnailVideo
-      if (!video) return
-      
-      video.addEventListener('loadedmetadata', () => {
-        // 设置一个较小的尺寸来显示缩略图
-        video.style.width = '100%'
-        video.style.height = '100%'
-        video.style.objectFit = 'cover'
-      })
-      
-      // 尝试加载第一帧
-      video.currentTime = 0.1
-    },
-    
     handleClick() {
       this.$router.push({
         name: 'videoDetail',
@@ -116,10 +95,11 @@ export default {
   border-radius: 4px;
 }
 
-.thumbnail-video {
+.thumbnail-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .play-overlay {

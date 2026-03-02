@@ -49,7 +49,8 @@
             v-model:page-size="pageSize"
             :total="pagination.total"
             :page-sizes="[12, 24, 48]"
-            layout="total, sizes, prev, pager, next, jumper"
+            :layout="paginationLayout"
+            :small="isMobile"
             background
             @size-change="handlePageSizeChange"
             @current-change="handlePageChange"
@@ -94,6 +95,7 @@ export default {
       currentPage: 1,
       pageSize: 12,
       sortBy: 'name',
+      isMobile: window.innerWidth <= 768,
       pagination: {
         total: 0,
         page: 1,
@@ -109,14 +111,25 @@ export default {
         return `未找到包含 "${this.searchKeyword}" 的视频`
       }
       return '暂无视频文件'
+    },
+    paginationLayout() {
+      return this.isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'
     }
   },
   
   mounted() {
+    window.addEventListener('resize', this.handleResize)
     this.fetchVideos()
+  },
+
+  beforeUnmount() {
+    window.removeEventListener('resize', this.handleResize)
   },
   
   methods: {
+    handleResize() {
+      this.isMobile = window.innerWidth <= 768
+    },
     async fetchVideos() {
       this.loading = true
       this.error = null
@@ -227,8 +240,8 @@ export default {
 
 .grid-container {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
   margin-bottom: 40px;
 }
 
@@ -240,6 +253,8 @@ export default {
   display: flex;
   justify-content: center;
   margin-top: 40px;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 
 .error-alert {
@@ -249,13 +264,13 @@ export default {
 /* 响应式布局 */
 @media (max-width: 1200px) {
   .grid-container {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 992px) {
   .grid-container {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 20px;
   }
 }
@@ -266,12 +281,13 @@ export default {
   }
   
   .grid-container {
-    grid-template-columns: 1fr;
-    gap: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
   
   .pagination-container {
     margin-top: 30px;
+    justify-content: flex-start;
   }
 }
 
