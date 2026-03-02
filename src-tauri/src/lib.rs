@@ -1,5 +1,8 @@
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Child, Command};
+use std::sync::Mutex;
+
+struct BackendState(Mutex<Option<Child>>);
 
 fn backend_candidates(app: &tauri::AppHandle) -> Vec<PathBuf> {
   let mut candidates: Vec<PathBuf> = Vec::new();
@@ -17,7 +20,7 @@ fn backend_candidates(app: &tauri::AppHandle) -> Vec<PathBuf> {
   candidates
 }
 
-fn start_backend(app: &tauri::AppHandle) -> Result<(), String> {
+fn start_backend(app: &tauri::AppHandle) -> Result<Child, String> {
   let candidates = backend_candidates(app);
   let exe_path = candidates
     .iter()
@@ -32,21 +35,22 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(), String> {
       format!("未找到后端可执行文件 app.exe，已检查: {checked}")
     })?;
 
-  Command::new(&exe_path)
+  let child = Command::new(&exe_path)
     .spawn()
     .map_err(|error| format!("启动后端失败 {}: {}", exe_path.display(), error))?;
 
   log::info!("后端已启动: {}", exe_path.display());
-  Ok(())
+  Ok(child)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .setup(|app| {
-      start_backend(app.handle()).map_err(|message| {
+      let child = start_backend(app.handle()).map_err(|message| {
         Box::<dyn std::error::Error>::from(std::io::Error::new(std::io::ErrorKind::NotFound, message))
       })?;
+      app.manage(BackendState(Mutex::new(Some(child))));
 
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -56,6 +60,17 @@ pub fn run() {
         )?;
       }
       Ok(())
+    })
+    .on_window_event(|window, event| {
+      if let tauri::WindowEvent::CloseRequested { .. } = event {
+        if let Some(state) = window.app_handle().try_state::<BackendState>() {
+          if let Ok(mut guard) = state.0.lock() {
+            if let Some(mut child) = guard.take() {
+              let _ = child.kill();
+            }
+          }
+        }
+      }
     })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
