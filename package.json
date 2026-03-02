@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
+    "tauri": "tauri",
     "dev:lan": "vite --host 0.0.0.0 --port 5173"
   },
   "dependencies": {
@@ -14,11 +15,12 @@
     "axios": "^1.13.6",
     "element-plus": "^2.13.3",
     "pinia": "^3.0.4",
-    "video.js": "^8.0.0",
+    "video.js": "^7.21.7",
     "vue": "^3.5.29",
     "vue-router": "^5.0.3"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.10.0",
     "@vitejs/plugin-vue": "^6.0.4",
     "unplugin-auto-import": "^21.0.0",
     "unplugin-vue-components": "^31.0.0",
