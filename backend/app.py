@@ -5,6 +5,7 @@ import subprocess
 from flask import Flask, jsonify, request, Response, send_file
 from flask_cors import CORS
 import mimetypes
+import config
 from config import VIDEO_FOLDER, DEFAULT_PAGE_SIZE, PROJECT_ROOT, IS_FROZEN, reload_video_folder
 from utils import scan_video_files, filter_and_sort_videos, paginate_videos
 
