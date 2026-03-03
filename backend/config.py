@@ -44,6 +44,7 @@ def _load_video_folder_from_config():
     """Load video folder configuration from JSON file"""
     config_path = os.getenv('LOCAL_V_CONFIG_PATH')
     if not config_path:
+        print(f"LOCAL_V_CONFIG_PATH environment variable not set")
         return None
     
     if not os.path.exists(config_path):
@@ -55,20 +56,61 @@ def _load_video_folder_from_config():
             data = json.load(file)
         folder = data.get('video_folder')
         if folder:
-            print(f"Found video_folder in config: {folder}")
+            print(f"Found video_folder in config: '{folder}'")
             # Check if folder exists and is a directory
             folder_path = Path(folder)
             if folder_path.exists() and folder_path.is_dir():
-                print(f"Loaded video folder from config: {folder}")
+                print(f"Loaded video folder from config: '{folder}'")
                 return folder
             else:
-                print(f"Configured folder does not exist or is not a directory: {folder}")
+                print(f"Configured folder does not exist or is not a directory: '{folder}'")
+                print(f"  - Path exists: {folder_path.exists()}")
+                print(f"  - Is directory: {folder_path.is_dir()}")
         else:
             print(f"No video_folder key in config: {config_path}")
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error in {config_path}: {e}")
+        print(f"  File content might be corrupted")
     except Exception as e:
         print(f"Error loading config from {config_path}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
+    return None
+
+
+def get_config_path():
+    """Get the full path to the config file
+    
+    Priority:
+    1. Use LOCAL_V_CONFIG_PATH env variable if set
+    2. Fallback to OS-specific AppData path
+    """
+    config_path = os.getenv('LOCAL_V_CONFIG_PATH')
+    
+    # If env variable is set, return it (whether file exists or not)
+    if config_path:
+        print(f"Using config path from env: {config_path}")
+        return config_path
+    
+    # Fallback: construct the path based on OS
+    import platform
+    system = platform.system()
+    
+    if system == 'Windows':
+        app_data = os.getenv('APPDATA')
+    elif system == 'Darwin':  # macOS
+        app_data = os.path.expanduser('~/Library/Application Support')
+    else:  # Linux
+        app_data = os.getenv('XDG_CONFIG_HOME') or os.path.expanduser('~/.config')
+    
+    if app_data:
+        fallback_path = os.path.join(app_data, 'com.tauri.local', 'video_folder.json')
+        print(f"Using fallback config path: {fallback_path}")
+        return fallback_path
+    
+    print("Could not determine config path")
     return None
 
 
