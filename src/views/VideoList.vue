@@ -94,6 +94,7 @@ export default {
       loading: false,
       refreshing: false,
       error: null,
+      toastTimestamps: {},
       searchKeyword: '',
       currentPage: 1,
       pageSize: 12,
@@ -131,6 +132,28 @@ export default {
   },
   
   methods: {
+    getErrorMessage(err) {
+      if (err && typeof err === 'object' && typeof err.message === 'string') {
+        return err.message
+      }
+      if (typeof err === 'string') {
+        return err
+      }
+      try {
+        return JSON.stringify(err)
+      } catch {
+        return String(err)
+      }
+    },
+
+    toastOnce(key, type, message, cooldownMs = 4000) {
+      const now = Date.now()
+      const lastAt = this.toastTimestamps[key] || 0
+      if (now - lastAt < cooldownMs) return
+      this.toastTimestamps[key] = now
+      this.$message[type](message)
+    },
+
     handleResize() {
       this.isMobile = window.innerWidth <= 768
     },
@@ -165,8 +188,9 @@ export default {
           throw new Error(response.data.error || '获取视频列表失败')
         }
       } catch (err) {
-        this.error = err.message
-        this.$message.error('获取视频列表失败: ' + err.message)
+        const message = this.getErrorMessage(err)
+        this.error = message
+        this.toastOnce('fetchVideos', 'error', '获取视频列表失败: ' + message)
       } finally {
         this.loading = false
       }
@@ -207,7 +231,8 @@ export default {
         this.fetchVideos()
         this.$message.success('视频列表已刷新')
       } catch (err) {
-        this.$message.error('刷新失败: ' + err.message)
+        const message = this.getErrorMessage(err)
+        this.toastOnce('refresh', 'error', '刷新失败: ' + message)
       } finally {
         this.refreshing = false
       }
@@ -220,9 +245,9 @@ export default {
       }
 
       try {
-        const [{ open }, { writeTextFile, createDir }, { appDataDir, join }] = await Promise.all([
-          import('@tauri-apps/api/dialog'),
-          import('@tauri-apps/api/fs'),
+        const [{ open }, { writeTextFile }, { BaseDirectory }] = await Promise.all([
+          import('@tauri-apps/plugin-dialog'),
+          import('@tauri-apps/plugin-fs'),
           import('@tauri-apps/api/path')
         ])
 
@@ -237,18 +262,16 @@ export default {
         }
 
         const folderPath = Array.isArray(selected) ? selected[0] : selected
-        const dataDir = await appDataDir()
-        await createDir(dataDir, { recursive: true })
-
-        const configPath = await join(dataDir, 'video_folder.json')
         const payload = JSON.stringify({ video_folder: folderPath }, null, 2)
-        await writeTextFile(configPath, payload)
+        await writeTextFile('video_folder.json', payload, { baseDir: BaseDirectory.AppData })
 
         await videoApi.refreshCache()
         this.fetchVideos()
         this.$message.success('视频目录已更新')
       } catch (err) {
-        this.$message.error('选择文件夹失败: ' + err.message)
+        console.error('handleSelectFolder failed:', err)
+        const message = this.getErrorMessage(err)
+        this.toastOnce('selectFolder', 'error', '选择文件夹失败: ' + message)
       }
     }
   }

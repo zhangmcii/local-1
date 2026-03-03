@@ -9,12 +9,14 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "dev:lan": "vite --host 0.0.0.0 --port 5173",
-    "backend:build": "pyinstaller -F backend/app.py --name app --distpath src-tauri/resources --workpath backend/build --specpath backend --noconfirm",
+    "backend:build": "powershell -ExecutionPolicy Bypass -File scripts/backend_build.ps1",
     "tauri:dev:pc": "npm run backend:build && npm run tauri dev",
     "tauri:build:pc": "npm run backend:build && npm run tauri build"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.10.0",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-dialog": "^2.6.0",
+    "@tauri-apps/plugin-fs": "^2.4.5",
     "@videojs-player/vue": "^1.0.0",
     "axios": "^1.13.6",
     "element-plus": "^2.13.3",

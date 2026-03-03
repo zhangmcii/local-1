@@ -444,4 +444,9 @@ if __name__ == '__main__':
         print(f"Created video folder: {VIDEO_FOLDER}")
     
     debug_mode = os.getenv('FLASK_DEBUG', '0') == '1'
-    app.run(host='0.0.0.0', port=8990, debug=debug_mode)
+
+    # Desktop packaged app should only listen on localhost to avoid Windows firewall prompts
+    # and unintended LAN exposure. In dev, keep 0.0.0.0 for LAN access.
+    default_host = '127.0.0.1' if IS_FROZEN else '0.0.0.0'
+    host = os.getenv('LOCAL_V_HOST', default_host)
+    app.run(host=host, port=8990, debug=debug_mode)

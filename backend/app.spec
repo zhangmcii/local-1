@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app.py'],
+    ['E:\\project\\local\\backend\\app.py'],
     pathex=[],
     binaries=[],
     datas=[],
