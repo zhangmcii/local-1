@@ -36,7 +36,14 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Child, String> {
       format!("未找到后端可执行文件 app.exe，已检查: {checked}")
     })?;
 
-  let child = Command::new(&exe_path)
+  let mut command = Command::new(&exe_path);
+
+  if let Ok(app_data_dir) = app.path().app_data_dir() {
+    let config_path = app_data_dir.join("video_folder.json");
+    command.env("LOCAL_V_CONFIG_PATH", config_path);
+  }
+
+  let child = command
     .spawn()
     .map_err(|error| format!("启动后端失败 {}: {}", exe_path.display(), error))?;
 
@@ -47,6 +54,8 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Child, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_fs::init())
     .setup(|app| {
       let child = start_backend(app.handle()).map_err(|message| {
         Box::<dyn std::error::Error>::from(std::io::Error::new(std::io::ErrorKind::NotFound, message))

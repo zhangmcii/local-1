@@ -9,6 +9,17 @@
       </div>
       
       <div class="header-right" v-if="showControls">
+        <el-button
+          v-if="showFolderButton"
+          type="primary"
+          plain
+          class="folder-button"
+          @click="handleSelectFolder"
+        >
+          <el-icon><FolderOpened /></el-icon>
+          选择文件夹
+        </el-button>
+
         <el-input
           v-model="searchValue"
           placeholder="搜索视频..."
@@ -63,6 +74,10 @@ export default {
     totalVideos: {
       type: Number,
       default: 0
+    },
+    showFolderButton: {
+      type: Boolean,
+      default: false
     }
   },
   
@@ -85,6 +100,10 @@ export default {
     
     handlePageSizeChange() {
       this.$emit('page-size-change', this.pageSizeValue)
+    },
+
+    handleSelectFolder() {
+      this.$emit('select-folder')
     }
   }
 }
@@ -137,6 +156,12 @@ export default {
 .sort-select,
 .page-size-select {
   width: 140px;
+}
+
+.folder-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .video-count {

@@ -2,9 +2,11 @@
   <div class="video-list-page">
     <PageHeader
       :total-videos="pagination.total"
+      :show-folder-button="isTauri"
       @search="handleSearch"
       @sort="handleSort"
       @page-size-change="handlePageSizeChange"
+      @select-folder="handleSelectFolder"
     />
     
     <div class="content-container">
@@ -76,6 +78,7 @@
 import PageHeader from '../components/PageHeader.vue'
 import VideoCard from '../components/VideoCard.vue'
 import { videoApi } from '../api/video'
+import { isTauriRuntime } from '../utils/tauri'
 
 export default {
   name: 'VideoList',
@@ -96,6 +99,7 @@ export default {
       pageSize: 12,
       sortBy: 'name',
       isMobile: window.innerWidth <= 768,
+      isTauri: isTauriRuntime(),
       pagination: {
         total: 0,
         page: 1,
@@ -206,6 +210,45 @@ export default {
         this.$message.error('刷新失败: ' + err.message)
       } finally {
         this.refreshing = false
+      }
+    },
+
+    async handleSelectFolder() {
+      if (!this.isTauri) {
+        this.$message.warning('当前环境不支持选择本地文件夹')
+        return
+      }
+
+      try {
+        const [{ open }, { writeTextFile, createDir }, { appDataDir, join }] = await Promise.all([
+          import('@tauri-apps/api/dialog'),
+          import('@tauri-apps/api/fs'),
+          import('@tauri-apps/api/path')
+        ])
+
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          title: '选择视频文件夹'
+        })
+
+        if (!selected) {
+          return
+        }
+
+        const folderPath = Array.isArray(selected) ? selected[0] : selected
+        const dataDir = await appDataDir()
+        await createDir(dataDir, { recursive: true })
+
+        const configPath = await join(dataDir, 'video_folder.json')
+        const payload = JSON.stringify({ video_folder: folderPath }, null, 2)
+        await writeTextFile(configPath, payload)
+
+        await videoApi.refreshCache()
+        this.fetchVideos()
+        this.$message.success('视频目录已更新')
+      } catch (err) {
+        this.$message.error('选择文件夹失败: ' + err.message)
       }
     }
   }
