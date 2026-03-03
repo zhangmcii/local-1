@@ -1,9 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 
+# Get the directory containing this spec file
+SPEC_DIR = os.path.dirname(os.path.abspath(__file__))
 
 a = Analysis(
-    ['E:\\project\\local\\backend\\app.py'],
-    pathex=[],
+    [os.path.join(SPEC_DIR, 'app.py')],
+    pathex=[SPEC_DIR],
     binaries=[],
     datas=[],
     hiddenimports=[],

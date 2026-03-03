@@ -60,17 +60,15 @@
         </div>
       </div>
       
-      <!-- 错误提示 -->
-      <!-- 全局错误提示，固定在窗口顶端 -->
-  <el-alert
-        v-if="error"
+      <!-- 本地错误提示（非全局） -->
+      <el-alert
+        v-if="error && !backendError"
         :title="error"
         type="error"
         show-icon
         closable
         @close="error = null"
         class="error-alert"
-        style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:1000;width:calc(100% - 40px);max-width:600px;"
       />
     </div>
   </div>
@@ -97,6 +95,7 @@ export default {
       refreshing: false,
       error: null,
       toastTimestamps: {},
+      backendError: null,
       searchKeyword: '',
       currentPage: 1,
       pageSize: 12,
@@ -127,6 +126,12 @@ export default {
   mounted() {
     window.addEventListener('resize', this.handleResize)
     this.fetchVideos()
+    
+    if (window.__TAURI__ && window.__TAURI__.event) {
+      window.__TAURI__.event.listen('backend-error', event => {
+        this.backendError = event.payload
+      })
+    }
   },
 
   beforeUnmount() {
@@ -265,12 +270,48 @@ export default {
         }
 
         const folderPath = Array.isArray(selected) ? selected[0] : selected
+        
+        // Verify the directory exists
+        try {
+          const { exists } = await import('@tauri-apps/api/fs')
+          const dirExists = await exists(folderPath)
+          if (!dirExists) {
+            throw new Error('选中的目录不存在')
+          }
+        } catch (verifyErr) {
+          console.warn('Directory verification skipped:', verifyErr)
+        }
+        
         const payload = JSON.stringify({ video_folder: folderPath }, null, 2)
-        await writeTextFile('video_folder.json', payload, { baseDir: BaseDirectory.AppData })
+        await writeTextFile('video_folder.json', payload, { 
+          baseDir: BaseDirectory.AppData 
+        })
 
-        await videoApi.refreshCache()
-        this.fetchVideos()
-        this.$message.success('视频目录已更新')
+        // Give backend time to detect config change and clear cache
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Refresh cache and reload videos
+        this.loading = true
+        this.error = null
+        
+        try {
+          await videoApi.refreshCache()
+          // Wait a bit for backend to rescan
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          await this.fetchVideos()
+          
+          // Check if videos were found
+          if (this.videos.length === 0) {
+            this.$message.info('未在选中目录中找到视频文件')
+          } else {
+            this.$message.success(`视频目录已更新，找到 ${this.videos.length} 个视频`)
+          }
+        } catch (refreshErr) {
+          console.error('Cache refresh failed:', refreshErr)
+          // Even if refresh fails, try to fetch videos
+          await this.fetchVideos()
+        }
+        
       } catch (err) {
         console.error('handleSelectFolder failed:', err)
         const message = this.getErrorMessage(err)
@@ -294,7 +335,7 @@ export default {
 .content-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 20px 40px 20px;
+  padding: 20px 20px 40px 20px;
 }
 
 .loading-container {
@@ -331,7 +372,7 @@ export default {
 }
 
 .error-alert {
-  margin-top: 20px;
+  margin-bottom: 20px;
 }
 
 /* 响应式布局 */

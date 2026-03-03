@@ -324,11 +324,21 @@ def get_video_poster(filename):
 def refresh_videos():
     """刷新视频列表缓存"""
     global cached_videos
+    print("Refreshing video cache...")
+    old_folder = VIDEO_FOLDER
     reload_video_folder()
+    print(f"Video folder: {old_folder} -> {VIDEO_FOLDER}")
     cached_videos = None
+    
+    # Force rescan
+    video_count = len(get_videos_cache())
+    print(f"Found {video_count} videos after refresh")
+    
     return jsonify({
         'success': True,
-        'message': 'Video cache refreshed'
+        'message': f'Video cache refreshed, found {video_count} videos',
+        'video_folder': VIDEO_FOLDER,
+        'video_count': video_count
     })
 
 
@@ -434,14 +444,24 @@ def format_file_size(size_bytes):
 
 
 if __name__ == '__main__':
+    print(f"=" * 60)
     print(f"Starting Flask server...")
     print(f"Video folder: {VIDEO_FOLDER}")
-    print(f"Videos found: {len(get_videos_cache())}")
+    print(f"IS_FROZEN: {IS_FROZEN}")
+    print(f"PROJECT_ROOT: {PROJECT_ROOT}")
     
     # 确保视频目录存在
     if not os.path.exists(VIDEO_FOLDER):
         os.makedirs(VIDEO_FOLDER, exist_ok=True)
         print(f"Created video folder: {VIDEO_FOLDER}")
+    
+    # 扫描视频文件
+    try:
+        video_count = len(get_videos_cache())
+        print(f"Videos found: {video_count}")
+    except Exception as e:
+        print(f"Error scanning videos: {e}")
+        video_count = 0
     
     debug_mode = os.getenv('FLASK_DEBUG', '0') == '1'
 
@@ -449,4 +469,9 @@ if __name__ == '__main__':
     # and unintended LAN exposure. In dev, keep 0.0.0.0 for LAN access.
     default_host = '127.0.0.1' if IS_FROZEN else '0.0.0.0'
     host = os.getenv('LOCAL_V_HOST', default_host)
+    
+    print(f"Listening on: {host}:8990")
+    print(f"Debug mode: {debug_mode}")
+    print(f"=" * 60)
+    
     app.run(host=host, port=8990, debug=debug_mode)

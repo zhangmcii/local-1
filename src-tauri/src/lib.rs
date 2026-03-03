@@ -18,6 +18,14 @@ fn backend_candidates(app: &tauri::AppHandle) -> Vec<PathBuf> {
     candidates.push(resource_dir.join("resources").join("app.exe"));
   }
 
+  // Also check the current exe directory as a fallback
+  if let Ok(current_exe) = std::env::current_exe() {
+    if let Some(exe_dir) = current_exe.parent() {
+      candidates.push(exe_dir.join("app.exe"));
+      candidates.push(exe_dir.join("resources").join("app.exe"));
+    }
+  }
+
   candidates
 }
 
@@ -32,8 +40,8 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Child, String> {
         .iter()
         .map(|path| path.display().to_string())
         .collect::<Vec<String>>()
-        .join(", ");
-      let message = format!("未找到后端可执行文件 app.exe，已检查: {checked}");
+        .join("\n  ");
+      let message = format!("后端服务未找到。已检查以下位置:\n  {}\n\n请确保已运行 'npm run backend:build' 打包后端。", checked);
       message
     })?;
 
@@ -61,19 +69,33 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
     .setup(|app| {
-      match start_backend(app.handle()) {
-        Ok(child) => {
-          app.manage(BackendState(Mutex::new(Some(child))));
-        }
-        Err(message) => {
-          log::error!("backend start error: {}", message);
-          // emit a JS event so front‑end can display a nice message instead of
-          // relying on native dialogs. the window will exist at this point.
-          if let Some(win) = app.get_window("main") {
-            let _ = win.emit("backend-error", message.clone());
+      // Try to start backend with retry logic
+      let mut backend_started = false;
+      let mut last_error = String::new();
+      
+      for attempt in 1..=3 {
+        match start_backend(app.handle()) {
+          Ok(child) => {
+            app.manage(BackendState(Mutex::new(Some(child))));
+            backend_started = true;
+            log::info!("Backend started successfully on attempt {}", attempt);
+            break;
           }
-          // continue without a backend; the front-end will show an alert
-          // and API calls will simply fail.
+          Err(message) => {
+            last_error = message;
+            log::warn!("Backend start attempt {} failed: {}", attempt, last_error);
+            if attempt < 3 {
+              std::thread::sleep(std::time::Duration::from_millis(500 * attempt));
+            }
+          }
+        }
+      }
+      
+      if !backend_started {
+        log::error!("All backend start attempts failed: {}", last_error);
+        // Only emit error event if we have a window
+        if let Some(win) = app.get_window("main") {
+          let _ = win.emit("backend-error", last_error);
         }
       }
 

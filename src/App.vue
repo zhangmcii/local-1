@@ -7,7 +7,7 @@
       show-icon
       closable
       @close="backendError = null"
-      style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:1000;width:calc(100% - 40px);max-width:600px;"
+      style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:10000;width:calc(100% - 40px);max-width:600px;pointer-events:auto;"
     />
 
     <router-view v-slot="{ Component, route }">
@@ -21,7 +21,6 @@
 
 <script>
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
 
 export default {
   name: 'App',
@@ -32,17 +31,10 @@ export default {
       if (window.__TAURI__ && window.__TAURI__.event) {
         window.__TAURI__.event.listen('backend-error', event => {
           const msg = event.payload
-          backendError.value = msg
-          if (msg) {
-            // log and show a global notification
+          if (msg && !backendError.value) {
+            backendError.value = msg
             // eslint-disable-next-line no-console
             console.error('backend-error event:', msg)
-            ElMessage.error({
-              message: msg,
-              duration: 0,
-              showClose: true,
-              center: true
-            })
           }
         })
       }
