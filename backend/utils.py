@@ -26,15 +26,36 @@ def format_file_size(size_bytes):
     return f"{size:.1f} {size_names[i]}"
 
 
-def scan_video_files(video_folder):
-    """扫描视频文件夹，返回视频文件列表"""
+def scan_video_files(video_folder, recursive=False):
+    """扫描视频文件夹，返回视频文件列表
+    
+    Args:
+        video_folder: 视频文件夹路径
+        recursive: 是否递归扫描子文件夹
+    
+    Returns:
+        视频文件列表
+    """
     if not os.path.exists(video_folder):
+        print(f"Video folder does not exist: {video_folder}")
+        return []
+    
+    if not os.path.isdir(video_folder):
+        print(f"Path is not a directory: {video_folder}")
         return []
     
     videos = []
     video_path = Path(video_folder)
     
-    for file_path in video_path.iterdir():
+    # 使用递归或非递归扫描
+    if recursive:
+        # 递归扫描所有子文件夹
+        file_pattern = "**/*"
+    else:
+        # 只扫描当前文件夹
+        file_pattern = "*"
+    
+    for file_path in video_path.glob(file_pattern):
         if file_path.is_file() and file_path.suffix.lower() in VIDEO_EXTENSIONS:
             stat = file_path.stat()
             videos.append({
@@ -45,9 +66,11 @@ def scan_video_files(video_folder):
                 'mtime': stat.st_mtime,
                 'mtime_formatted': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
                 'path': str(file_path),
-                'url': f"/api/videos/{file_path.name}"
+                'url': f"/api/videos/{file_path.name}",
+                'relative_path': str(file_path.relative_to(video_path))
             })
     
+    print(f"Scanned {len(videos)} videos from {video_folder}")
     return videos
 
 

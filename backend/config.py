@@ -55,11 +55,14 @@ def _load_video_folder_from_config():
             data = json.load(file)
         folder = data.get('video_folder')
         if folder:
-            if os.path.isdir(folder):
+            print(f"Found video_folder in config: {folder}")
+            # Check if folder exists and is a directory
+            folder_path = Path(folder)
+            if folder_path.exists() and folder_path.is_dir():
                 print(f"Loaded video folder from config: {folder}")
                 return folder
             else:
-                print(f"Configured folder does not exist: {folder}")
+                print(f"Configured folder does not exist or is not a directory: {folder}")
         else:
             print(f"No video_folder key in config: {config_path}")
     except Exception as e:
@@ -79,24 +82,22 @@ def reload_video_folder():
     
     if configured:
         VIDEO_FOLDER = configured
+        print(f"Using configured video folder: {VIDEO_FOLDER}")
     else:
         VIDEO_FOLDER = VIDEO_FOLDER_DEFAULT
         print(f"Using default video folder: {VIDEO_FOLDER}")
 
-    # PyInstaller 场景兜底：如果目录不存在，尝试 exe 同目录下 public
-    if IS_FROZEN and not os.path.exists(VIDEO_FOLDER):
-        runtime_public = Path(sys.executable).resolve().parent / 'public'
-        if runtime_public.exists():
-            VIDEO_FOLDER = str(runtime_public)
-            print(f"Using fallback video folder: {VIDEO_FOLDER}")
-        else:
-            print(f"Warning: Video folder does not exist: {VIDEO_FOLDER}")
-            # Create it if it doesn't exist
-            try:
-                os.makedirs(VIDEO_FOLDER, exist_ok=True)
-                print(f"Created video folder: {VIDEO_FOLDER}")
-            except Exception as e:
-                print(f"Failed to create video folder: {e}")
+    # Ensure the video folder exists
+    folder_path = Path(VIDEO_FOLDER)
+    if not folder_path.exists():
+        print(f"Warning: Video folder does not exist: {VIDEO_FOLDER}")
+        try:
+            folder_path.mkdir(parents=True, exist_ok=True)
+            print(f"Created video folder: {VIDEO_FOLDER}")
+        except Exception as e:
+            print(f"Failed to create video folder: {e}")
+    elif not folder_path.is_dir():
+        print(f"Warning: Video folder path is not a directory: {VIDEO_FOLDER}")
 
     return VIDEO_FOLDER
 

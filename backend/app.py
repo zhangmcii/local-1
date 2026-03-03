@@ -349,14 +349,45 @@ def refresh_videos():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """健康检查接口"""
+    config_path = os.getenv('LOCAL_V_CONFIG_PATH')
     return jsonify({
         'success': True,
         'message': 'Server is running',
         'video_folder': VIDEO_FOLDER,
+        'folder_exists': os.path.exists(VIDEO_FOLDER) and os.path.isdir(VIDEO_FOLDER),
+        'config_path': config_path,
+        'config_exists': config_path and os.path.exists(config_path),
         'runtime_root': str(PROJECT_ROOT),
         'is_frozen': IS_FROZEN,
         'video_count': len(get_videos_cache())
     })
+
+
+@app.route('/api/debug/scan', methods=['GET'])
+def debug_scan():
+    """调试接口：扫描指定文件夹"""
+    folder = request.args.get('folder', VIDEO_FOLDER)
+    recursive = request.args.get('recursive', 'false').lower() == 'true'
+    
+    try:
+        from utils import scan_video_files
+        videos = scan_video_files(folder, recursive=recursive)
+        
+        return jsonify({
+            'success': True,
+            'folder': folder,
+            'folder_exists': os.path.exists(folder) and os.path.isdir(folder),
+            'recursive': recursive,
+            'video_count': len(videos),
+            'videos': videos[:10],  # 只返回前10个
+            'sample_video_names': [v['name'] for v in videos[:10]]
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'folder': folder
+        }), 500
 
 
 @app.route('/api/videos/<filename>/check', methods=['GET'])
