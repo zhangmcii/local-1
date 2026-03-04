@@ -68,25 +68,18 @@ def _safe_video_file_path(filename):
 
 
 def _get_lan_ipv4_addresses():
-    """收集本机可用于局域网访问的 IPv4 地址"""
+    """获取本机局域网 IPv4 地址"""
     addresses = set()
-
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        for _, _, _, _, sockaddr in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            ip = sockaddr[0]
-            if ip and not ip.startswith('127.'):
-                addresses.add(ip)
+        # 连接到一个外部地址（不需要实际连通）
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        addresses.add(ip)
     except Exception:
         pass
-
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.connect(('8.8.8.8', 80))
-            ip = sock.getsockname()[0]
-            if ip and not ip.startswith('127.'):
-                addresses.add(ip)
-    except Exception:
-        pass
+    finally:
+        s.close()
 
     return sorted(addresses)
 
@@ -621,7 +614,7 @@ if __name__ == '__main__':
 
     # Desktop packaged app should only listen on localhost to avoid Windows firewall prompts
     # and unintended LAN exposure. In dev, keep 0.0.0.0 for LAN access.
-    default_host = '127.0.0.1' if IS_FROZEN else '0.0.0.0'
+    default_host ='0.0.0.0'
     host = os.getenv('LOCAL_V_HOST', default_host)
     
     print(f"Listening on: {host}:8990")
