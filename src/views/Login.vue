@@ -13,6 +13,9 @@
             @keyup.enter="handleLogin"
           />
         </el-form-item>
+        <el-form-item class="remember-item">
+          <el-checkbox v-model="rememberPassword">记住密码</el-checkbox>
+        </el-form-item>
         <el-button type="primary" size="large" class="login-btn" @click="handleLogin">
           登录
         </el-button>
@@ -23,13 +26,23 @@
 
 <script>
 const AUTH_KEY = 'local_v_logged_in'
+const REMEMBER_KEY = 'local_v_remember_password'
+const SAVED_PASSWORD_KEY = 'local_v_saved_password'
 const PASSWORD = import.meta.env.VITE_LOGIN_PASSWORD || '123456'
 
 export default {
   name: 'LoginPage',
   data() {
     return {
-      password: ''
+      password: '',
+      rememberPassword: false
+    }
+  },
+  mounted() {
+    const remember = localStorage.getItem(REMEMBER_KEY) === '1'
+    if (remember) {
+      this.rememberPassword = true
+      this.password = localStorage.getItem(SAVED_PASSWORD_KEY) || ''
     }
   },
   methods: {
@@ -40,6 +53,13 @@ export default {
       }
 
       sessionStorage.setItem(AUTH_KEY, '1')
+      if (this.rememberPassword) {
+        localStorage.setItem(REMEMBER_KEY, '1')
+        localStorage.setItem(SAVED_PASSWORD_KEY, this.password)
+      } else {
+        localStorage.removeItem(REMEMBER_KEY)
+        localStorage.removeItem(SAVED_PASSWORD_KEY)
+      }
       const redirectPath = this.$route.query.redirect || '/'
       this.$router.replace(redirectPath)
     }
@@ -73,6 +93,10 @@ export default {
   margin: 0 0 20px;
   text-align: center;
   color: #6b7280;
+}
+
+.remember-item {
+  margin-top: -6px;
 }
 
 .login-btn {

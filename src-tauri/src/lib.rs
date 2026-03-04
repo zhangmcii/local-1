@@ -1,6 +1,8 @@
 use chrono::Local;
 use std::fs::{OpenOptions, create_dir_all};
 use std::io::Write;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -154,6 +156,12 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Child, String> {
   }
 
   let mut command = Command::new(&exe_path);
+  #[cfg(target_os = "windows")]
+  if !cfg!(debug_assertions) {
+    // Hide backend console window in packaged app.
+    command.creation_flags(0x08000000);
+  }
+
   if cfg!(debug_assertions) {
     // In development, keep backend logs visible in the terminal.
     command.stdout(Stdio::inherit());
