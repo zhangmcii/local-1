@@ -11,7 +11,7 @@
     "dev:lan": "vite --host 0.0.0.0 --port 5173",
     "backend:build": "powershell -ExecutionPolicy Bypass -File scripts/backend_build.ps1",
     "tauri:dev:pc": "npm run backend:build && npm run tauri dev",
-    "tauri:build:pc": "npm run backend:build && npm run tauri build"
+    "tauri:build:pc": "npm run build && npm run backend:build && npm run tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",

@@ -1,11 +1,13 @@
 import os
+import sys
 import tempfile
 import hashlib
 import subprocess
 import json
 import socket
 import ntpath
-from flask import Flask, jsonify, request, Response, send_file
+from pathlib import Path
+from flask import Flask, jsonify, request, Response, send_file, send_from_directory
 from flask_cors import CORS
 import mimetypes
 import config
@@ -41,6 +43,31 @@ CORS(app, resources={
 
 # 缓存视频列表，避免重复扫描
 cached_videos = None
+
+
+def _resolve_frontend_dist_dir():
+    """Resolve frontend static dist directory for packaged runtime."""
+    env_dir = os.getenv('LOCAL_V_FRONTEND_DIST_PATH', '').strip()
+    if env_dir:
+        candidate = Path(env_dir)
+        if (candidate / 'index.html').exists():
+            return candidate
+
+    candidates = []
+    if IS_FROZEN:
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.append(exe_dir / 'web')
+        meipass = getattr(sys, '_MEIPASS', None)
+        if meipass:
+            candidates.append(Path(meipass) / 'web')
+            candidates.append(Path(meipass) / 'dist')
+
+    candidates.append(PROJECT_ROOT / 'dist')
+
+    for candidate in candidates:
+        if (candidate / 'index.html').exists():
+            return candidate
+    return None
 
 
 def _safe_video_file_path(filename):
@@ -422,7 +449,9 @@ def get_video_poster(filename):
 def get_network_info():
     """返回前端局域网访问地址建议"""
     frontend_port = request.args.get('frontend_port', '').strip()
-    if not frontend_port.isdigit():
+    if IS_FROZEN:
+        frontend_port = '8990'
+    elif not frontend_port.isdigit():
         frontend_port = '3650'
 
     addresses = _get_lan_ipv4_addresses()
@@ -597,6 +626,30 @@ def check_video(filename):
             'success': False,
             'error': f'检查视频时出错: {str(e)}'
         }), 500
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    """Packaged mode: serve built frontend files for LAN devices."""
+    if path.startswith('api/'):
+        return jsonify({
+            'success': False,
+            'error': 'Not found'
+        }), 404
+
+    dist_dir = _resolve_frontend_dist_dir()
+    if not dist_dir:
+        return jsonify({
+            'success': False,
+            'error': 'Frontend dist not found'
+        }), 404
+
+    requested_file = dist_dir / path if path else None
+    if requested_file and requested_file.exists() and requested_file.is_file():
+        return send_from_directory(str(dist_dir), path)
+
+    return send_file(dist_dir / 'index.html')
 
 
 if __name__ == '__main__':

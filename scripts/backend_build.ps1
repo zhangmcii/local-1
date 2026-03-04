@@ -9,6 +9,8 @@ if (-not (Test-Path $python)) {
 
 $appPy = Join-Path $repoRoot 'backend\app.py'
 $distPath = Join-Path $repoRoot 'src-tauri\resources'
+$frontendDist = Join-Path $repoRoot 'dist'
+$frontendResourcePath = Join-Path $distPath 'web'
 $workPath = Join-Path $repoRoot 'backend\build'
 $specPath = Join-Path $repoRoot 'backend'
 $targetExe = Join-Path $distPath 'local_v_backend.exe'
@@ -27,6 +29,17 @@ for ($i = 0; $i -lt 10; $i++) {
 
 if (Test-Path $targetExe) {
   throw "Failed to overwrite $targetExe (file is locked). Close the installed app / any running backend process and retry."
+}
+
+if (Test-Path $frontendResourcePath) {
+  Remove-Item -Recurse -Force $frontendResourcePath
+}
+
+if (Test-Path $frontendDist) {
+  New-Item -ItemType Directory -Force -Path $frontendResourcePath | Out-Null
+  Copy-Item -Path (Join-Path $frontendDist '*') -Destination $frontendResourcePath -Recurse -Force
+} else {
+  Write-Warning "Frontend dist not found at $frontendDist. Run 'npm run build' before backend build for LAN page sharing."
 }
 
 & $python -m PyInstaller `

@@ -34,7 +34,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "resources/local_v_backend.exe"
+      "resources/local_v_backend.exe",
+      "resources/web"
     ]
   }
 }
