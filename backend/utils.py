@@ -1,13 +1,14 @@
 import os
-import uuid
+import hashlib
 from pathlib import Path
 from datetime import datetime
 from config import VIDEO_EXTENSIONS
 
 
-def generate_video_id():
-    """生成视频唯一ID"""
-    return str(uuid.uuid4())
+def generate_video_id(relative_path):
+    """基于相对路径生成稳定ID，避免每次扫描变化"""
+    digest = hashlib.md5(relative_path.encode('utf-8')).hexdigest()
+    return digest
 
 
 def format_file_size(size_bytes):
@@ -58,8 +59,9 @@ def scan_video_files(video_folder, recursive=False):
     for file_path in video_path.glob(file_pattern):
         if file_path.is_file() and file_path.suffix.lower() in VIDEO_EXTENSIONS:
             stat = file_path.stat()
+            relative_path = str(file_path.relative_to(video_path))
             videos.append({
-                'id': generate_video_id(),
+                'id': generate_video_id(relative_path),
                 'name': file_path.name,
                 'size': stat.st_size,
                 'size_formatted': format_file_size(stat.st_size),
@@ -67,7 +69,7 @@ def scan_video_files(video_folder, recursive=False):
                 'mtime_formatted': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
                 'path': str(file_path),
                 'url': f"/api/videos/{file_path.name}",
-                'relative_path': str(file_path.relative_to(video_path))
+                'relative_path': relative_path
             })
     
     print(f"Scanned {len(videos)} videos from {video_folder}")

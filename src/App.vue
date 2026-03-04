@@ -20,12 +20,13 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 export default {
   name: 'App',
   setup() {
     const backendError = ref(null)
+    let unlistenBackendError = null
 
     onMounted(() => {
       if (window.__TAURI__ && window.__TAURI__.event) {
@@ -36,7 +37,16 @@ export default {
             // eslint-disable-next-line no-console
             console.error('backend-error event:', msg)
           }
+        }).then(unlisten => {
+          unlistenBackendError = unlisten
         })
+      }
+    })
+
+    onBeforeUnmount(() => {
+      if (unlistenBackendError) {
+        unlistenBackendError()
+        unlistenBackendError = null
       }
     })
 

@@ -1,9 +1,9 @@
 # PC 应用打包步骤（前端 + 后端 exe 一体）
 
 本项目使用 `Tauri + Vue + Flask`。目标是：
-- 先把后端 `backend/app.py` 打成 `app.exe`
+- 先把后端 `backend/app.py` 打成 `local_v_backend.exe`
 - 再把前端打包成桌面应用
-- 应用启动时自动拉起后端 `app.exe`
+- 应用启动时自动拉起后端 `local_v_backend.exe`
 
 ## 1. 环境准备（Windows）
 
@@ -38,8 +38,8 @@ npm run tauri:dev:pc
 ```
 
 这个命令会做两件事：
-1. 先执行 `npm run backend:build`，生成 `src-tauri/resources/app.exe`
-2. 再执行 `npm run tauri dev`，Tauri 启动时自动拉起 `app.exe`
+1. 先执行 `npm run backend:build`，生成 `src-tauri/resources/local_v_backend.exe`
+2. 再执行 `npm run tauri dev`，Tauri 启动时自动拉起 `local_v_backend.exe`
 
 ## 4. 正式打包（生成安装包）
 
@@ -48,7 +48,7 @@ npm run tauri:build:pc
 ```
 
 这个命令会做两件事：
-1. 先生成最新后端 `app.exe` 到 `src-tauri/resources/`
+1. 先生成最新后端 `local_v_backend.exe` 到 `src-tauri/resources/`
 2. 再执行 Tauri build，产出桌面安装包（`src-tauri/target/release/bundle/...`）
 
 ## 5. 关键脚本说明
@@ -64,8 +64,8 @@ npm run tauri:build:pc
    - 先执行 `pip install pyinstaller`
    - 或用 `python -m PyInstaller` 方式替代
 
-2. Tauri 报找不到 `app.exe`
-   - 确认 `src-tauri/resources/app.exe` 已生成
+2. Tauri 报找不到 `local_v_backend.exe`
+   - 确认 `src-tauri/resources/local_v_backend.exe` 已生成
    - 先单独运行 `npm run backend:build`
 
 3. 应用打开但没有视频

@@ -7,6 +7,7 @@
       @sort="handleSort"
       @page-size-change="handlePageSizeChange"
       @select-folder="handleSelectFolder"
+      @show-address="handleShowAddress"
     />
     
     <div class="content-container">
@@ -62,7 +63,7 @@
       
       <!-- 本地错误提示（非全局） -->
       <el-alert
-        v-if="error && !backendError"
+        v-if="error"
         :title="error"
         type="error"
         show-icon
@@ -71,6 +72,36 @@
         class="error-alert"
       />
     </div>
+
+    <el-dialog
+      v-model="addressDialogVisible"
+      title="局域网连接地址"
+      width="560px"
+    >
+      <el-skeleton v-if="addressLoading" :rows="4" animated />
+      <div v-else>
+        <p class="address-tip">其他设备可尝试访问以下前端地址：</p>
+        <el-empty v-if="frontendUrls.length === 0" description="未检测到可用局域网 IP" />
+        <el-space
+          v-else
+          direction="vertical"
+          alignment="stretch"
+          style="width: 100%;"
+        >
+          <el-alert
+            v-for="url in frontendUrls"
+            :key="url"
+            :title="url"
+            type="success"
+            :closable="false"
+            show-icon
+          />
+        </el-space>
+        <p class="address-note">
+          如果其它设备无法打开，请确认本机防火墙和端口已放行。
+        </p>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -95,7 +126,6 @@ export default {
       refreshing: false,
       error: null,
       toastTimestamps: {},
-      backendError: null,
       searchKeyword: '',
       currentPage: 1,
       pageSize: 12,
@@ -107,7 +137,10 @@ export default {
         page: 1,
         page_size: 12,
         total_pages: 1
-      }
+      },
+      addressDialogVisible: false,
+      addressLoading: false,
+      frontendUrls: []
     }
   },
   
@@ -126,12 +159,6 @@ export default {
   mounted() {
     window.addEventListener('resize', this.handleResize)
     this.fetchVideos()
-    
-    if (window.__TAURI__ && window.__TAURI__.event) {
-      window.__TAURI__.event.listen('backend-error', event => {
-        this.backendError = event.payload
-      })
-    }
   },
 
   beforeUnmount() {
@@ -292,29 +319,17 @@ export default {
           baseDir: BaseDirectory.AppData 
         })
 
-        // Give backend time to detect config change and clear cache
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // Refresh cache and reload videos
-        this.loading = true
-        this.error = null
-        
-        try {
-          await videoApi.refreshCache()
-          // Wait a bit for backend to rescan
-          await new Promise(resolve => setTimeout(resolve, 1000))
+        // Refresh cache and reload videos using server response instead of fixed delays
+        const refreshResponse = await videoApi.refreshCache()
+        if (refreshResponse?.data?.success) {
           await this.fetchVideos()
-          
-          // Check if videos were found
           if (this.videos.length === 0) {
             this.$message.info('未在选中目录中找到视频文件')
           } else {
             this.$message.success(`视频目录已更新，找到 ${this.videos.length} 个视频`)
           }
-        } catch (refreshErr) {
-          console.error('Cache refresh failed:', refreshErr)
-          // Even if refresh fails, try to fetch videos
-          await this.fetchVideos()
+        } else {
+          throw new Error(refreshResponse?.data?.error || '刷新视频目录失败')
         }
         
       } catch (err) {
@@ -325,6 +340,26 @@ export default {
         this.error = message
         this.$message.error('选择文件夹失败: ' + message)
         this.toastOnce('selectFolder', 'error', '选择文件夹失败: ' + message)
+      }
+    },
+
+    async handleShowAddress() {
+      this.addressDialogVisible = true
+      this.addressLoading = true
+      try {
+        const currentPort = window.location.port || '3650'
+        const response = await videoApi.getNetworkInfo(currentPort)
+        if (response.data.success) {
+          this.frontendUrls = response.data.data?.frontend_urls || []
+        } else {
+          throw new Error(response.data.error || '获取连接地址失败')
+        }
+      } catch (err) {
+        const message = this.getErrorMessage(err)
+        this.frontendUrls = []
+        this.toastOnce('networkInfo', 'error', '获取连接地址失败: ' + message)
+      } finally {
+        this.addressLoading = false
       }
     }
   }
@@ -378,6 +413,17 @@ export default {
 
 .error-alert {
   margin-bottom: 20px;
+}
+
+.address-tip {
+  margin-bottom: 12px;
+  color: #303133;
+}
+
+.address-note {
+  margin-top: 14px;
+  color: #909399;
+  font-size: 13px;
 }
 
 /* 响应式布局 */

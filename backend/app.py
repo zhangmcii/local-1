@@ -3,12 +3,15 @@ import tempfile
 import hashlib
 import subprocess
 import json
+import socket
+import ntpath
 from flask import Flask, jsonify, request, Response, send_file
 from flask_cors import CORS
 import mimetypes
 import config
 from config import VIDEO_FOLDER, DEFAULT_PAGE_SIZE, PROJECT_ROOT, IS_FROZEN, reload_video_folder
-from utils import scan_video_files, filter_and_sort_videos, paginate_videos
+from datetime import datetime
+from utils import scan_video_files, filter_and_sort_videos, paginate_videos, format_file_size, generate_video_id
 
 app = Flask(__name__)
 
@@ -38,6 +41,54 @@ CORS(app, resources={
 
 # 缓存视频列表，避免重复扫描
 cached_videos = None
+
+
+def _safe_video_file_path(filename):
+    """构建并校验视频文件路径，防止绝对路径和目录穿越"""
+    if not filename or '\x00' in filename:
+        raise ValueError('Invalid filename')
+
+    if filename.startswith(('/', '\\\\', '//')):
+        raise ValueError('Invalid filename')
+
+    drive, _ = ntpath.splitdrive(filename)
+    if drive:
+        raise ValueError('Invalid filename')
+
+    full_path = os.path.abspath(os.path.join(VIDEO_FOLDER, filename))
+    base_path = os.path.abspath(VIDEO_FOLDER)
+
+    try:
+        if os.path.commonpath([full_path, base_path]) != base_path:
+            raise ValueError('Invalid filename')
+    except ValueError:
+        raise ValueError('Invalid filename')
+
+    return full_path
+
+
+def _get_lan_ipv4_addresses():
+    """收集本机可用于局域网访问的 IPv4 地址"""
+    addresses = set()
+
+    try:
+        for _, _, _, _, sockaddr in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = sockaddr[0]
+            if ip and not ip.startswith('127.'):
+                addresses.add(ip)
+    except Exception:
+        pass
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(('8.8.8.8', 80))
+            ip = sock.getsockname()[0]
+            if ip and not ip.startswith('127.'):
+                addresses.add(ip)
+    except Exception:
+        pass
+
+    return sorted(addresses)
 
 
 def get_videos_cache():
@@ -225,15 +276,8 @@ def send_file_partial(path, filename):
 def stream_video(filename):
     """视频流式传输接口"""
     try:
-        # 安全检查，防止路径遍历攻击
-        if '..' in filename or filename.startswith('/'):
-            return jsonify({
-                'success': False,
-                'error': 'Invalid filename'
-            }), 400
-        
-        # 构建文件路径
-        file_path = os.path.join(VIDEO_FOLDER, filename)
+        # 构建并校验文件路径
+        file_path = _safe_video_file_path(filename)
         
         if not os.path.exists(file_path):
             return jsonify({
@@ -249,6 +293,60 @@ def stream_video(filename):
         
         return send_file_partial(file_path, filename)
     
+    except ValueError:
+        return jsonify({
+            'success': False,
+            'error': 'Invalid filename'
+        }), 400
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/videos/<filename>/meta', methods=['GET'])
+def get_video_meta(filename):
+    """获取单个视频元信息（用于详情页精确查询）"""
+    try:
+        file_path = _safe_video_file_path(filename)
+        if not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'error': 'Video not found'
+            }), 404
+
+        if not os.path.isfile(file_path):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid video file'
+            }), 400
+
+        relative_path = os.path.relpath(file_path, VIDEO_FOLDER)
+        stat = os.stat(file_path)
+        data = {
+            'id': generate_video_id(relative_path),
+            'name': filename,
+            'size': stat.st_size,
+            'size_formatted': format_file_size(stat.st_size),
+            'mtime': stat.st_mtime,
+            'mtime_formatted': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+            'path': file_path,
+            'url': f"/api/videos/{filename}",
+            'relative_path': relative_path
+        }
+
+        return jsonify({
+            'success': True,
+            'data': data
+        })
+    except ValueError:
+        return jsonify({
+            'success': False,
+            'error': 'Invalid filename'
+        }), 400
+
     except Exception as e:
         return jsonify({
             'success': False,
@@ -259,13 +357,14 @@ def stream_video(filename):
 @app.route('/api/videos/<filename>/poster', methods=['GET'])
 def get_video_poster(filename):
     """返回视频封面：优先抽帧，失败时返回占位图"""
-    if '..' in filename or filename.startswith('/'):
+    try:
+        file_path = _safe_video_file_path(filename)
+    except ValueError:
         return jsonify({
             'success': False,
             'error': 'Invalid filename'
         }), 400
 
-    file_path = os.path.join(VIDEO_FOLDER, filename)
     if not os.path.exists(file_path):
         return jsonify({
             'success': False,
@@ -326,6 +425,26 @@ def get_video_poster(filename):
     return Response(svg.strip(), mimetype='image/svg+xml')
 
 
+@app.route('/api/network-info', methods=['GET'])
+def get_network_info():
+    """返回前端局域网访问地址建议"""
+    frontend_port = request.args.get('frontend_port', '').strip()
+    if not frontend_port.isdigit():
+        frontend_port = '3650'
+
+    addresses = _get_lan_ipv4_addresses()
+    frontend_urls = [f'http://{ip}:{frontend_port}' for ip in addresses]
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'ips': addresses,
+            'frontend_port': frontend_port,
+            'frontend_urls': frontend_urls
+        }
+    })
+
+
 @app.route('/api/refresh', methods=['POST'])
 def refresh_videos():
     """刷新视频列表缓存"""
@@ -346,11 +465,14 @@ def refresh_videos():
                 new_folder = data.get('video_folder')
                 print(f"Config video_folder: {new_folder}")
                 
-                if new_folder and new_folder != old_folder:
+                if new_folder and os.path.isdir(new_folder) and new_folder != old_folder:
                     VIDEO_FOLDER = new_folder
                     print(f"✓ Updated VIDEO_FOLDER: {old_folder} -> {VIDEO_FOLDER}")
                 elif new_folder == old_folder:
                     print(f"✓ VIDEO_FOLDER unchanged: {VIDEO_FOLDER}")
+                elif new_folder and not os.path.isdir(new_folder):
+                    print(f"✗ Invalid folder path (not exists or not a directory): {new_folder}")
+                    print(f"✓ Keep current VIDEO_FOLDER: {VIDEO_FOLDER}")
                 else:
                     print(f"✗ Invalid config, keeping: {VIDEO_FOLDER}")
         except Exception as e:
@@ -360,16 +482,16 @@ def refresh_videos():
     else:
         print(f"✗ Config file not found: {config_path}")
     
-    # Ensure VIDEO_FOLDER exists
-    if not os.path.exists(VIDEO_FOLDER):
-        print(f"⚠ VIDEO_FOLDER does not exist: {VIDEO_FOLDER}")
-        try:
-            os.makedirs(VIDEO_FOLDER, exist_ok=True)
-            print(f"✓ Created VIDEO_FOLDER: {VIDEO_FOLDER}")
-        except Exception as e:
-            print(f"✗ Failed to create VIDEO_FOLDER: {e}")
-    else:
-        print(f"✓ VIDEO_FOLDER exists: {VIDEO_FOLDER}")
+    # Keep old folder if current folder becomes invalid for any reason
+    if not os.path.isdir(VIDEO_FOLDER):
+        print(f"⚠ Current VIDEO_FOLDER is invalid: {VIDEO_FOLDER}")
+        if os.path.isdir(old_folder):
+            VIDEO_FOLDER = old_folder
+            print(f"✓ Reverted VIDEO_FOLDER to previous valid folder: {VIDEO_FOLDER}")
+        else:
+            # Fallback to config default loader without changing API behavior
+            VIDEO_FOLDER = reload_video_folder()
+            print(f"✓ Reloaded VIDEO_FOLDER from config/default: {VIDEO_FOLDER}")
     
     # Clear cache and rescan
     print(f"Scanning videos from: {VIDEO_FOLDER}")
@@ -408,14 +530,7 @@ def health_check():
 def check_video(filename):
     """检查视频文件信息"""
     try:
-        # 安全检查
-        if '..' in filename or filename.startswith('/'):
-            return jsonify({
-                'success': False,
-                'error': 'Invalid filename'
-            }), 400
-        
-        file_path = os.path.join(VIDEO_FOLDER, filename)
+        file_path = _safe_video_file_path(filename)
         
         if not os.path.exists(file_path):
             return jsonify({
@@ -469,27 +584,17 @@ def check_video(filename):
             'data': result
         })
     
+    except ValueError:
+        return jsonify({
+            'success': False,
+            'error': 'Invalid filename'
+        }), 400
+
     except Exception as e:
         return jsonify({
             'success': False,
             'error': f'检查视频时出错: {str(e)}'
         }), 500
-
-
-def format_file_size(size_bytes):
-    """格式化文件大小"""
-    if size_bytes == 0:
-        return "0 B"
-    
-    size_names = ["B", "KB", "MB", "GB", "TB"]
-    i = 0
-    size = size_bytes
-    
-    while size >= 1024 and i < len(size_names) - 1:
-        size /= 1024.0
-        i += 1
-    
-    return f"{size:.1f} {size_names[i]}"
 
 
 if __name__ == '__main__':

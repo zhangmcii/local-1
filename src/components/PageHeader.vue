@@ -20,6 +20,16 @@
           选择文件夹
         </el-button>
 
+        <el-button
+          type="success"
+          plain
+          class="address-button"
+          @click="handleShowAddress"
+        >
+          <el-icon><Share /></el-icon>
+          连接地址
+        </el-button>
+
         <el-input
           v-model="searchValue"
           placeholder="搜索视频..."
@@ -104,6 +114,10 @@ export default {
 
     handleSelectFolder() {
       this.$emit('select-folder')
+    },
+
+    handleShowAddress() {
+      this.$emit('show-address')
     }
   }
 }
@@ -159,6 +173,12 @@ export default {
 }
 
 .folder-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.address-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;

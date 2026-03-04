@@ -171,24 +171,16 @@ export default {
   methods: {
     async loadVideoDetail() {
       try {
-        // 从 API 获取视频信息
-        const response = await videoApi.getVideos({
-          keyword: this.filename
-        })
+        // 精确获取目标视频元信息，避免分页导致的漏查
+        const response = await videoApi.getVideoMeta(this.filename)
         
         if (response.data.success) {
-          const videos = response.data.data.videos
-          const video = videos.find(v => v.name === this.filename)
-          
-          if (video) {
-            this.videoInfo = video
-            this.videoSrc = videoApi.getVideoStreamUrl(this.filename)
-            this.videoPoster = videoApi.getVideoPosterUrl(this.filename)
-            this.fileSize = video.size_formatted
-            this.modifyTime = video.mtime_formatted
-          } else {
-            throw new Error('视频信息未找到')
-          }
+          const video = response.data.data
+          this.videoInfo = video
+          this.videoSrc = videoApi.getVideoStreamUrl(this.filename)
+          this.videoPoster = videoApi.getVideoPosterUrl(this.filename)
+          this.fileSize = video.size_formatted
+          this.modifyTime = video.mtime_formatted
         } else {
           throw new Error(response.data.error || '获取视频信息失败')
         }

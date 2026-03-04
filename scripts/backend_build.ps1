@@ -11,7 +11,7 @@ $appPy = Join-Path $repoRoot 'backend\app.py'
 $distPath = Join-Path $repoRoot 'src-tauri\resources'
 $workPath = Join-Path $repoRoot 'backend\build'
 $specPath = Join-Path $repoRoot 'backend'
-$targetExe = Join-Path $distPath 'app.exe'
+$targetExe = Join-Path $distPath 'local_v_backend.exe'
 
 # PyInstaller overwrites by deleting the old EXE. On Windows this can fail if the backend is still running
 # or antivirus is scanning the file, so retry a few times to reduce flakiness.
@@ -31,9 +31,8 @@ if (Test-Path $targetExe) {
 
 & $python -m PyInstaller `
   -F $appPy `
-  --name app `
+  --name local_v_backend `
   --distpath $distPath `
   --workpath $workPath `
   --specpath $specPath `
   --noconfirm
-

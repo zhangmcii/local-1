@@ -59,6 +59,24 @@ export const videoApi = {
   },
 
   /**
+   * 获取视频元信息（详情页使用）
+   * @param {string} filename - 视频文件名
+   * @returns {Promise<Object>}
+   */
+  getVideoMeta(filename) {
+    return api.get(`/videos/${encodeURIComponent(filename)}/meta`)
+  },
+
+  /**
+   * 获取局域网访问地址信息
+   * @param {string|number} frontendPort - 前端访问端口
+   * @returns {Promise<Object>}
+   */
+  getNetworkInfo(frontendPort) {
+    return api.get('/network-info', { params: { frontend_port: frontendPort } })
+  },
+
+  /**
    * 刷新视频列表缓存
    * @returns {Promise<Object>}
    */

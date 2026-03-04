@@ -232,7 +232,6 @@ export default {
 
   watch: {
     src() {
-      this.clearProgress()
       this.clearPlayerError()
     }
   }
