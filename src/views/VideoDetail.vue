@@ -14,15 +14,32 @@
       <div class="detail-layout">
         <main class="detail-main">
           <div class="player-section">
-            <VideoPlayer
-              :src="videoSrc"
-              :poster="videoPoster"
-              type="video/mp4"
-              @ready="handlePlayerReady"
-              @error="handlePlayerError"
-              @ended="handleVideoEnded"
-              ref="videoPlayerRef"
-            />
+            <div class="player-stage">
+              <transition name="player-fade">
+                <VideoPlayer
+                  v-if="isPlayerMounted"
+                  :src="videoSrc"
+                  :poster="videoPoster"
+                  type="video/mp4"
+                  @ready="handlePlayerReady"
+                  @error="handlePlayerError"
+                  @ended="handleVideoEnded"
+                  ref="videoPlayerRef"
+                  class="detail-player"
+                />
+              </transition>
+
+              <transition name="poster-fade">
+                <div v-if="!isPlayerReady" class="player-placeholder" aria-hidden="true">
+                  <img
+                    class="player-placeholder-image"
+                    :src="videoPoster"
+                    alt=""
+                    @error="handlePosterFallback"
+                  />
+                </div>
+              </transition>
+            </div>
           </div>
 
           <div v-if="error" class="error-container">
@@ -118,6 +135,9 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import { videoApi } from '../api/video'
 
+const DEFAULT_POSTER = new URL('../assets/video-placeholder.svg', import.meta.url).href
+const POSTER_LOAD_TIMEOUT_MS = 3500
+
 export default {
   name: 'VideoDetail',
   
@@ -136,13 +156,15 @@ export default {
     return {
       ArrowLeft,
       videoSrc: '',
-      videoPoster: '',
+      videoPoster: DEFAULT_POSTER,
       fileSize: '',
       modifyTime: '',
       error: null,
       videoInfo: null,
       videoCheckResult: null,
-      isCheckingVideo: false
+      isCheckingVideo: false,
+      isPlayerMounted: false,
+      isPlayerReady: false
     }
   },
   
@@ -180,13 +202,53 @@ export default {
   mounted() {
     this.loadVideoDetail()
   },
+
+  watch: {
+    filename() {
+      this.loadVideoDetail()
+    }
+  },
   
   beforeUnmount() {
     // VideoPlayer 组件会自动清理
   },
   
   methods: {
+    handlePosterFallback() {
+      this.videoPoster = DEFAULT_POSTER
+    },
+
+    resolvePosterUrl(posterUrl) {
+      if (!posterUrl) return Promise.resolve(DEFAULT_POSTER)
+
+      return new Promise((resolve) => {
+        const image = new Image()
+        let settled = false
+
+        const finish = (url) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          image.onload = null
+          image.onerror = null
+          resolve(url)
+        }
+
+        const timer = setTimeout(() => finish(DEFAULT_POSTER), POSTER_LOAD_TIMEOUT_MS)
+        image.onload = () => finish(posterUrl)
+        image.onerror = () => finish(DEFAULT_POSTER)
+        image.src = posterUrl
+      })
+    },
+
     async loadVideoDetail() {
+      this.error = null
+      this.videoCheckResult = null
+      this.videoSrc = ''
+      this.videoPoster = DEFAULT_POSTER
+      this.isPlayerMounted = false
+      this.isPlayerReady = false
+
       try {
         // 精确获取目标视频元信息，避免分页导致的漏查
         const response = await videoApi.getVideoMeta(this.filename)
@@ -194,8 +256,11 @@ export default {
         if (response.data.success) {
           const video = response.data.data
           this.videoInfo = video
-          this.videoSrc = videoApi.getVideoStreamUrl(this.filename)
-          this.videoPoster = videoApi.getVideoPosterUrl(this.filename)
+          const streamUrl = videoApi.getVideoStreamUrl(this.filename)
+          const posterUrl = videoApi.getVideoPosterUrl(this.filename)
+          this.videoPoster = await this.resolvePosterUrl(posterUrl)
+          this.videoSrc = streamUrl
+          this.isPlayerMounted = true
           this.fileSize = video.size_formatted
           this.modifyTime = video.mtime_formatted
         } else {
@@ -214,6 +279,7 @@ export default {
     handlePlayerReady(player) {
       // 播放器准备好，清除错误状态
       this.error = null
+      this.isPlayerReady = true
     },
     
     async handlePlayerError(error) {
@@ -351,7 +417,53 @@ export default {
   border-radius: var(--radius-lg);
   overflow: hidden;
   border: 1px solid var(--border-default);
-  background: var(--bg-surface);
+  background: #111827;
+}
+
+.player-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #111827;
+}
+
+.detail-player {
+  position: relative;
+  z-index: 1;
+}
+
+.player-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: #111827;
+}
+
+.player-placeholder-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.player-fade-enter-active,
+.player-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.player-fade-enter-from,
+.player-fade-leave-to {
+  opacity: 0;
+}
+
+.poster-fade-enter-active,
+.poster-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.poster-fade-enter-from,
+.poster-fade-leave-to {
+  opacity: 0;
 }
 
 .video-info-card {

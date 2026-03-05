@@ -97,6 +97,7 @@
       direction="btt"
       size="72%"
       :with-header="false"
+      :lock-scroll="false"
       class="mobile-filter-drawer"
     >
       <div class="mobile-filter-panel">

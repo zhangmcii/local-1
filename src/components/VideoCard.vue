@@ -1,7 +1,13 @@
 <template>
   <el-card class="video-card" shadow="hover" @click="handleClick">
     <div class="video-thumbnail">
-      <img class="thumbnail-image" :src="posterSrc" :alt="video.name" loading="lazy" />
+      <img
+        class="thumbnail-image"
+        :src="posterSrc"
+        :alt="video.name"
+        loading="lazy"
+        @error="handlePosterError"
+      />
 
       <!-- <div class="play-overlay">
         <el-icon class="play-icon"><i-ep-VideoPlay /></el-icon>
@@ -21,6 +27,8 @@
 <script>
 import { videoApi } from '../api/video'
 
+const DEFAULT_POSTER = new URL('../assets/video-placeholder.svg', import.meta.url).href
+
 export default {
   name: 'VideoCard',
 
@@ -38,6 +46,13 @@ export default {
   },
 
   methods: {
+    handlePosterError(event) {
+      const imageElement = event?.target
+      if (!imageElement) return
+      if (imageElement.src.endsWith(DEFAULT_POSTER)) return
+      imageElement.src = DEFAULT_POSTER
+    },
+
     handleClick() {
       this.$router.push({
         name: 'videoDetail',

@@ -376,7 +376,7 @@ def get_video_meta(filename):
 
 @app.route('/api/videos/<filename>/poster', methods=['GET'])
 def get_video_poster(filename):
-    """返回视频封面：优先抽帧，失败时返回占位图"""
+    """返回视频封面：优先返回缓存，其次尝试抽帧，失败则返回错误"""
     try:
         file_path = _safe_video_file_path(filename)
     except ValueError:
@@ -420,29 +420,17 @@ def get_video_poster(filename):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
-        except Exception:
+        except Exception as exc:
+            app.logger.warning('Failed to generate poster for %s: %s', file_path, exc)
             poster_path = ''
 
     if poster_path and os.path.exists(poster_path):
         return send_file(poster_path, mimetype='image/jpeg')
 
-    safe_name = filename.replace('<', '').replace('>', '')
-    initials = safe_name[:2].upper() if safe_name else 'VD'
-    svg = f"""
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4f46e5"/>
-      <stop offset="100%" stop-color="#0891b2"/>
-    </linearGradient>
-  </defs>
-  <rect width="640" height="360" fill="url(#bg)"/>
-  <circle cx="320" cy="180" r="52" fill="rgba(255,255,255,0.22)"/>
-  <polygon points="304,152 304,208 350,180" fill="#ffffff"/>
-  <text x="320" y="300" text-anchor="middle" fill="rgba(255,255,255,0.95)" font-size="34" font-family="Arial, sans-serif">{initials}</text>
-</svg>
-"""
-    return Response(svg.strip(), mimetype='image/svg+xml')
+    return jsonify({
+        'success': False,
+        'error': 'Poster not available'
+    }), 404
 
 
 @app.route('/api/network-info', methods=['GET'])

@@ -260,6 +260,11 @@ export default {
   height: auto;
   aspect-ratio: 16/9;
   font-size: 14px;
+  background-color: #111827;
+}
+
+.video-wrapper :deep(.vjs-poster) {
+  background-color: #111827;
 }
 
 .video-wrapper :deep(.vjs-big-play-button) {
