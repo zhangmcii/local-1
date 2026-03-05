@@ -49,3 +49,4 @@ if (Test-Path $frontendDist) {
   --workpath $workPath `
   --specpath $specPath `
   --noconfirm
+  --icon (Join-Path $repoRoot 'backend\backend.ico')
