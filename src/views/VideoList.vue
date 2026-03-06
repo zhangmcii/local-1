@@ -8,6 +8,7 @@
       @page-size-change="handlePageSizeChange"
       @select-folder="handleSelectFolder"
       @show-address="handleShowAddress"
+      @show-settings="handleShowSettings"
     />
     
     <div class="content-container">
@@ -85,7 +86,7 @@
     >
       <el-skeleton v-if="addressLoading" :rows="4" animated />
       <div v-else>
-        <p class="address-tip">可在同一局域网设备打开以下地址：</p>
+        <p class="address-tip">可在同一局域网设备的浏览器打开以下地址：</p>
         <el-empty v-if="frontendUrls.length === 0" description="未检测到可用局域网 IP" />
         <el-space
           v-else
@@ -93,21 +94,80 @@
           alignment="stretch"
           style="width: 100%;"
         >
-          <el-alert
+          <div
             v-for="url in frontendUrls"
             :key="url"
-            :title="url"
-            type="success"
-            :closable="false"
-            show-icon
-            class="url-alert"
-          />
+            class="url-row"
+          >
+            <div class="url-row-main">
+              <el-icon class="url-row-icon"><i-ep-Link /></el-icon>
+              <span class="url-row-text">{{ url }}</span>
+            </div>
+            <el-button
+              size="small"
+              class="url-copy-button"
+              @click="copyAddress(url)"
+            >
+              复制
+            </el-button>
+          </div>
         </el-space>
         <p class="address-note">
-          若无法访问，请检查本机防火墙与端口放行设置。
+          若无法访问，请检查电脑防火墙与端口放行设置。
         </p>
       </div>
     </el-dialog>
+
+    <el-dialog
+      v-model="settingsDialogVisible"
+      title="设置"
+      width="400px"
+      :lock-scroll="false"
+      :close-on-click-modal="false"
+      class="settings-dialog"
+    >
+      <div class="settings-section">
+        <div class="settings-section-header">
+          <h3>修改登录密码</h3>
+          <p>修改后，下次启动应用会继续使用新密码。</p>
+        </div>
+
+        <el-form label-position="top" @submit.prevent="submitPasswordChange">
+          <el-form-item label="当前密码">
+            <el-input
+              v-model="passwordForm.currentPassword"
+              show-password
+              placeholder="请输入当前密码"
+            />
+          </el-form-item>
+          <el-form-item label="新密码">
+            <el-input
+              v-model="passwordForm.nextPassword"
+              show-password
+              placeholder="请输入新密码"
+            />
+          </el-form-item>
+          <el-form-item label="确认新密码">
+            <el-input
+              v-model="passwordForm.confirmPassword"
+              show-password
+              placeholder="请再次输入新密码"
+              @keyup.enter="submitPasswordChange"
+            />
+          </el-form-item>
+          <div class="settings-submit">
+            <el-button
+              type="primary"
+              :loading="passwordSaving"
+              @click="submitPasswordChange"
+            >
+              保存密码
+            </el-button>
+          </div>
+        </el-form>
+      </div>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -115,6 +175,7 @@
 import PageHeader from '../components/PageHeader.vue'
 import VideoCard from '../components/VideoCard.vue'
 import { videoApi } from '../api/video'
+import { updatePassword } from '../utils/auth'
 import { isTauriRuntime } from '../utils/tauri'
 
 export default {
@@ -146,7 +207,14 @@ export default {
       },
       addressDialogVisible: false,
       addressLoading: false,
-      frontendUrls: []
+      frontendUrls: [],
+      settingsDialogVisible: false,
+      passwordSaving: false,
+      passwordForm: {
+        currentPassword: '',
+        nextPassword: '',
+        confirmPassword: ''
+      }
     }
   },
   
@@ -379,6 +447,74 @@ export default {
       } finally {
         this.addressLoading = false
       }
+    },
+
+    async copyAddress(url) {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(url)
+        } else {
+          const input = document.createElement('input')
+          input.value = url
+          input.setAttribute('readonly', 'readonly')
+          input.style.position = 'absolute'
+          input.style.left = '-9999px'
+          document.body.appendChild(input)
+          input.select()
+          document.execCommand('copy')
+          document.body.removeChild(input)
+        }
+        this.$message.success('连接地址已复制')
+      } catch (_) {
+        this.$message.error('复制失败，请手动复制地址')
+      }
+    },
+
+    handleShowSettings() {
+      this.resetPasswordForm()
+      this.settingsDialogVisible = true
+    },
+
+    resetPasswordForm() {
+      this.passwordForm = {
+        currentPassword: '',
+        nextPassword: '',
+        confirmPassword: ''
+      }
+    },
+
+    async submitPasswordChange() {
+      const { currentPassword, nextPassword, confirmPassword } = this.passwordForm
+      const trimmedCurrentPassword = currentPassword.trim()
+      const trimmedNextPassword = nextPassword.trim()
+      const trimmedConfirmPassword = confirmPassword.trim()
+
+      if (!trimmedCurrentPassword) {
+        this.$message.error('请输入当前密码')
+        return
+      }
+
+      if (!trimmedNextPassword) {
+        this.$message.error('请输入新密码')
+        return
+      }
+
+      if (trimmedNextPassword !== trimmedConfirmPassword) {
+        this.$message.error('两次输入的新密码不一致')
+        return
+      }
+
+      this.passwordSaving = true
+      try {
+        await updatePassword(trimmedCurrentPassword, trimmedNextPassword)
+        this.$message.success('登录密码已更新')
+        this.settingsDialogVisible = false
+        this.resetPasswordForm()
+      } catch (err) {
+        this.$message.error(this.getErrorMessage(err))
+      } finally {
+        this.passwordSaving = false
+      }
     }
   }
 }
@@ -455,14 +591,68 @@ export default {
   overflow-wrap: anywhere;
 }
 
-:deep(.address-dialog) {
-  max-width: calc(100vw - 24px);
+.url-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #b7e1c1;
+  border-radius: 10px;
+  background: #f0fdf4;
 }
 
-:deep(.url-alert .el-alert__title) {
-  white-space: normal;
-  word-break: break-all;
+.url-row-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.url-row-icon {
+  flex: 0 0 auto;
+  font-size: 16px;
+  color: #15803d;
+}
+
+.url-row-text {
+  min-width: 0;
+  color: #166534;
+  font-size: 14px;
   line-height: 1.4;
+  word-break: break-all;
+}
+
+.url-copy-button {
+  flex: 0 0 auto;
+  border-radius: 8px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-section-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.settings-section-header p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.settings-submit {
+  display: flex;
+  justify-content: flex-end;
+}
+
+:deep(.address-dialog) {
+  max-width: calc(100vw - 24px);
 }
 
 @media (max-width: 1439px) {
@@ -481,6 +671,15 @@ export default {
 @media (max-width: 768px) {
   .content-container {
     padding: 0 12px 16px;
+  }
+
+  .url-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .url-copy-button {
+    width: 100%;
   }
 
   .video-grid {

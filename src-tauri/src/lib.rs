@@ -198,9 +198,62 @@ fn start_backend(app: &tauri::AppHandle) -> Result<Child, String> {
   Ok(child)
 }
 
+fn stop_backend(app: &tauri::AppHandle, reason: &str) {
+  let state = app.state::<BackendState>();
+  let mut guard = match state.0.lock() {
+    Ok(guard) => guard,
+    Err(_) => {
+      write_app_log(app, "ERROR", "停止后端失败：无法获取进程状态锁");
+      return;
+    }
+  };
+
+  let Some(mut child) = guard.take() else {
+    return;
+  };
+
+  match child.try_wait() {
+    Ok(Some(status)) => {
+      write_app_log(
+        app,
+        "INFO",
+        &format!("后端已退出，无需重复停止（{}）: {}", reason, status),
+      );
+      return;
+    }
+    Ok(None) => {}
+    Err(error) => {
+      write_app_log(
+        app,
+        "WARN",
+        &format!("检查后端进程状态失败（{}）: {}", reason, error),
+      );
+    }
+  }
+
+  if let Err(error) = child.kill() {
+    write_app_log(
+      app,
+      "WARN",
+      &format!("停止后端进程失败（{}）: {}", reason, error),
+    );
+  }
+
+  if let Err(error) = child.wait() {
+    write_app_log(
+      app,
+      "WARN",
+      &format!("等待后端进程退出失败（{}）: {}", reason, error),
+    );
+    return;
+  }
+
+  write_app_log(app, "INFO", &format!("已停止后端进程（{}）", reason));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  let app = tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![append_frontend_log])
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
@@ -261,19 +314,17 @@ pub fn run() {
     .on_window_event(|window, event| {
       if let tauri::WindowEvent::CloseRequested { .. } = event {
         let app_handle = window.app_handle();
-        {
-          let state = app_handle.state::<BackendState>();
-          let mut guard = match state.0.lock() {
-            Ok(guard) => guard,
-            Err(_) => return,
-          };
-          if let Some(mut child) = guard.take() {
-            let _ = child.kill();
-            write_app_log(&app_handle, "INFO", "窗口关闭，已停止后端进程");
-          }
-        }
+        stop_backend(&app_handle, "窗口关闭");
       }
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application");
+
+  app.run(|app_handle, event| {
+    match event {
+      tauri::RunEvent::Exit => stop_backend(app_handle, "应用退出"),
+      tauri::RunEvent::ExitRequested { .. } => stop_backend(app_handle, "应用请求退出"),
+      _ => {}
+    }
+  });
 }

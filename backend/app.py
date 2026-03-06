@@ -1,8 +1,5 @@
 import os
 import sys
-import tempfile
-import hashlib
-import subprocess
 import json
 import socket
 import ntpath
@@ -376,59 +373,18 @@ def get_video_meta(filename):
 
 @app.route('/api/videos/<filename>/poster', methods=['GET'])
 def get_video_poster(filename):
-    """返回视频封面：优先返回缓存，其次尝试抽帧，失败则返回错误"""
+    """不生成视频封面，统一回退到前端占位图"""
     try:
-        file_path = _safe_video_file_path(filename)
+        _safe_video_file_path(filename)
     except ValueError:
         return jsonify({
             'success': False,
             'error': 'Invalid filename'
         }), 400
 
-    if not os.path.exists(file_path):
-        return jsonify({
-            'success': False,
-            'error': 'Video not found'
-        }), 404
-
-    cache_dir = os.path.join(tempfile.gettempdir(), 'local_v_posters')
-    os.makedirs(cache_dir, exist_ok=True)
-
-    cache_key = hashlib.md5(file_path.encode('utf-8')).hexdigest()
-    poster_path = os.path.join(cache_dir, f'{cache_key}.jpg')
-
-    if not os.path.exists(poster_path):
-        ffmpeg_bin = os.getenv('FFMPEG_BIN', 'ffmpeg')
-        cmd = [
-            ffmpeg_bin,
-            '-y',
-            '-ss',
-            '00:00:01',
-            '-i',
-            file_path,
-            '-frames:v',
-            '1',
-            '-q:v',
-            '2',
-            poster_path
-        ]
-
-        try:
-            subprocess.run(
-                cmd,
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-        except Exception as exc:
-            app.logger.warning('Failed to generate poster for %s: %s', file_path, exc)
-            poster_path = ''
-
-    if poster_path and os.path.exists(poster_path):
-        return send_file(poster_path, mimetype='image/jpeg')
-
     return jsonify({
         'success': False,
+        'poster': None,
         'error': 'Poster not available'
     }), 404
 

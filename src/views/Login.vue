@@ -14,7 +14,7 @@
           />
         </el-form-item>
         <el-form-item class="remember-item">
-          <el-checkbox v-model="rememberPassword">记住密码</el-checkbox>
+          <el-checkbox v-model="rememberPassword">记住登录状态</el-checkbox>
         </el-form-item>
         <el-button type="primary" size="large" class="login-btn" @click="handleLogin">
           登录
@@ -25,41 +25,52 @@
 </template>
 
 <script>
+import { getEffectivePassword } from '../utils/auth'
+
 const AUTH_KEY = 'local_v_logged_in'
-const REMEMBER_KEY = 'local_v_remember_password'
-const SAVED_PASSWORD_KEY = 'local_v_saved_password'
-const PASSWORD = import.meta.env.VITE_LOGIN_PASSWORD || '123456'
+const REMEMBER_LOGIN_KEY = 'local_v_remember_login'
 
 export default {
   name: 'LoginPage',
   data() {
     return {
       password: '',
-      rememberPassword: false
+      rememberPassword: false,
+      effectivePassword: ''
     }
   },
-  mounted() {
-    const remember = localStorage.getItem(REMEMBER_KEY) === '1'
+  async mounted() {
+    const remember = localStorage.getItem(REMEMBER_LOGIN_KEY) === '1'
     if (remember) {
       this.rememberPassword = true
-      this.password = localStorage.getItem(SAVED_PASSWORD_KEY) || ''
+      sessionStorage.setItem(AUTH_KEY, '1')
+      const redirectPath = this.$route.query.redirect || '/'
+      this.$router.replace(redirectPath)
+      return
     }
+
+    this.effectivePassword = await getEffectivePassword()
   },
   methods: {
     handleLogin() {
-      if (this.password !== PASSWORD) {
+      if (!this.effectivePassword) {
+        this.$message.error('密码配置尚未加载完成，请稍后重试')
+        return
+      }
+
+      if (this.password !== this.effectivePassword) {
         this.$message.error('密码错误')
         return
       }
 
       sessionStorage.setItem(AUTH_KEY, '1')
       if (this.rememberPassword) {
-        localStorage.setItem(REMEMBER_KEY, '1')
-        localStorage.setItem(SAVED_PASSWORD_KEY, this.password)
+        localStorage.setItem(REMEMBER_LOGIN_KEY, '1')
       } else {
-        localStorage.removeItem(REMEMBER_KEY)
-        localStorage.removeItem(SAVED_PASSWORD_KEY)
+        localStorage.removeItem(REMEMBER_LOGIN_KEY)
       }
+      localStorage.removeItem('local_v_remember_password')
+      localStorage.removeItem('local_v_saved_password')
       const redirectPath = this.$route.query.redirect || '/'
       this.$router.replace(redirectPath)
     }

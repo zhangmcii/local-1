@@ -31,6 +31,35 @@ const api = axios.create({
   }
 })
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+export async function waitForApiReady(options = {}) {
+  const {
+    attempts = 25,
+    intervalMs = 400,
+    requestTimeoutMs = 1200
+  } = options
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await api.get('/health', {
+        timeout: requestTimeoutMs
+      })
+      if (response?.data?.success) {
+        return true
+      }
+    } catch (_) {
+      // Keep polling until the backend is ready or we hit the attempt limit.
+    }
+
+    if (attempt < attempts - 1) {
+      await sleep(intervalMs)
+    }
+  }
+
+  throw new Error('请关闭应用后重新打开。')
+}
+
 export const videoApi = {
   /**
    * 获取视频列表

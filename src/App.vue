@@ -1,7 +1,21 @@
 <template>
   <div id="app">
+    <div v-if="!startupReady" class="startup-screen">
+      <el-result
+        :icon="startupFailed ? 'error' : 'info'"
+        :title="startupFailed ? '应用打开有点慢' : '正在打开应用'"
+        :sub-title="startupMessage"
+      >
+        <template #extra>
+          <el-button v-if="startupFailed" type="primary" @click="initializeApp">
+            重新检查
+          </el-button>
+        </template>
+      </el-result>
+    </div>
+
     <el-alert
-      v-if="backendError"
+      v-if="backendError && startupReady"
       :title="backendError"
       type="error"
       show-icon
@@ -10,7 +24,7 @@
       style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:10000;width:calc(100% - 40px);max-width:600px;pointer-events:auto;"
     />
 
-    <router-view v-slot="{ Component, route }">
+    <router-view v-if="startupReady" v-slot="{ Component, route }">
       <keep-alive>
         <component :is="Component" v-if="route.meta.keepAlive" />
       </keep-alive>
@@ -21,12 +35,36 @@
 
 <script>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { waitForApiReady } from './api/video'
+import { isTauriRuntime } from './utils/tauri'
 
 export default {
   name: 'App',
   setup() {
     const backendError = ref(null)
+    const startupReady = ref(false)
+    const startupFailed = ref(false)
+    const startupMessage = ref('正在等待本地服务就绪，请稍候。')
     let unlistenBackendError = null
+
+    const initializeApp = async () => {
+      startupReady.value = false
+      startupFailed.value = false
+      startupMessage.value = '正在打开应用，请稍候。'
+
+      if (!isTauriRuntime()) {
+        startupReady.value = true
+        return
+      }
+
+      try {
+        await waitForApiReady()
+        startupReady.value = true
+      } catch (error) {
+        startupFailed.value = true
+        startupMessage.value = error?.message || '请关闭应用后重新打开。'
+      }
+    }
 
     onMounted(() => {
       if (window.__TAURI__ && window.__TAURI__.event) {
@@ -41,6 +79,8 @@ export default {
           unlistenBackendError = unlisten
         })
       }
+
+      void initializeApp()
     })
 
     onBeforeUnmount(() => {
@@ -51,7 +91,11 @@ export default {
     })
 
     return {
-      backendError
+      backendError,
+      initializeApp,
+      startupFailed,
+      startupMessage,
+      startupReady
     }
   }
 }
@@ -92,6 +136,14 @@ body {
 
 #app {
   min-height: 100vh;
+}
+
+.startup-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
 /* 全局滚动条样式 */

@@ -32,6 +32,15 @@
             <el-icon><i-ep-Share /></el-icon>
             连接地址
           </el-button>
+
+          <el-button
+            v-if="!isMobile"
+            class="settings-button"
+            @click="handleShowSettings"
+          >
+            <el-icon><i-ep-Setting /></el-icon>
+            设置
+          </el-button>
         </div>
 
         <div class="mobile-filter-bar" v-if="isMobile">
@@ -39,10 +48,15 @@
             共 {{ totalVideos }} 个视频
           </el-tag>
           <el-button class="filter-toggle" @click="mobileFilterVisible = true">
+            <el-icon><i-ep-Filter /></el-icon>
             筛选条件
             <span v-if="activeFilterCount > 0" class="filter-badge">
               {{ activeFilterCount }}
             </span>
+          </el-button>
+          <el-button class="more-toggle" @click="handleShowSettings">
+            <el-icon><i-ep-Setting /></el-icon>
+            设置
           </el-button>
         </div>
 
@@ -225,6 +239,10 @@ export default {
       this.$emit('show-address')
     },
 
+    handleShowSettings() {
+      this.$emit('show-settings')
+    },
+
     resetMobileFilters() {
       this.searchValue = ''
       this.sortValue = 'name'
@@ -326,7 +344,9 @@ export default {
 }
 
 .folder-button,
-.address-button {
+.address-button,
+.settings-button,
+.more-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -341,7 +361,8 @@ export default {
   line-height: 32px;
 }
 
-.filter-toggle {
+.filter-toggle,
+.more-toggle {
   height: 34px;
   border-radius: 8px;
 }
@@ -432,12 +453,19 @@ export default {
   .mobile-filter-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 8px;
   }
 
   .mobile-count {
-    min-width: 0;
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 110px;
+    padding-left: 8px;
+    padding-right: 8px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   .filter-main {
@@ -460,10 +488,17 @@ export default {
   }
 
   .folder-button,
-  .address-button {
-    flex: 1;
+  .address-button,
+  .settings-button,
+  .more-toggle,
+  .filter-toggle {
+    flex: 1 1 0;
     justify-content: center;
     min-width: 0;
+  }
+
+  .more-toggle{
+    margin-left: 0;
   }
 }
 
